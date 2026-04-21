@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kr.ac.kopo.talkti.data.model.SttRequest
+import kr.ac.kopo.talkti.data.remote.NetworkRepository
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,7 +41,7 @@ class VoiceToTextParser(
 
     private val _state = MutableStateFlow(VoiceToTextParserState())
     val state: StateFlow<VoiceToTextParserState> = _state.asStateFlow()
-
+    private val networkRepository = NetworkRepository()
     private var recognizer: SpeechRecognizer? = null
     private val ttsManager = TtsManager(application)
 
@@ -81,7 +82,10 @@ class VoiceToTextParser(
             setRecognitionListener(this@VoiceToTextParser)
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                putExtra(
+                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                )
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, currentLanguageCode)
                 // 부분 인식 결과 활성화 (실시간 타이핑 효과)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
@@ -133,7 +137,8 @@ class VoiceToTextParser(
         // 시간에 의한 타임아웃이거나 말을 안했을 경우 => 연속 듣기 상태라면 다시 시작
         if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
             error == SpeechRecognizer.ERROR_NO_MATCH ||
-            error == SpeechRecognizer.ERROR_CLIENT) {
+            error == SpeechRecognizer.ERROR_CLIENT
+        ) {
 
             if (isContinuousListening) {
                 startSpeechRecognizerInternal()
@@ -206,26 +211,23 @@ class VoiceToTextParser(
     }
 
     private fun tempSendData(request: SttRequest) {
-        // 추후 실제 서버 전송 모듈이 완성되면 연동할 위치
-        Log.d("VoiceToTextParser", "STT Data Prepared -> command: ${request.command}, timestamp: ${request.timestamp}, language: ${request.language}")
+        Log.d("VoiceToTextParser", "서버 전송 시도 중: ${request.command}")
 
-        /*
-        // [사용 예시]
-        CoroutineScope(Dispatchers.IO).launch {
-            val repository = NetworkRepository()
-            val isSuccess = repository.sendTextToServer(request.command)
-            if (isSuccess) { 
-                Log.d("STT", "전송 완료!") 
-            } else { 
-                Log.e("STT", "전송 실패 ㅠㅠ") 
+        // networkRepository를 사용해서 실제 서버로 쏘는 로직
+        scope.launch(Dispatchers.IO) {
+            val result = networkRepository.sendTextToServer(request.command)
+
+            result.onSuccess { serverMessage ->
+                Log.d("STT_SERVER", "성공! 답변: $serverMessage")
+                launch(Dispatchers.Main) {
+                    ttsManager.speak(serverMessage)
+                }
+            }.onFailure { error ->
+                Log.e("STT_SERVER", "실패 ㅠㅠ", error)
+                launch(Dispatchers.Main) {
+                    ttsManager.speak("다시 말씀해주세요")
+                }
             }
-        }
-        */
-
-        // 1.5초 뒤 TTS 시뮬레이션
-        scope.launch {
-            delay(1500)
-            ttsManager.speak("성공적으로 전달했습니다")
         }
     }
 }
