@@ -22,6 +22,10 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kr.ac.kopo.talkti.features.images.ScreenCaptureService
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kr.ac.kopo.talkti.data.remote.NetworkRepository // 패키지 경로 확인!
+import android.util.Log
 
 class MainActivity : ComponentActivity() {
 

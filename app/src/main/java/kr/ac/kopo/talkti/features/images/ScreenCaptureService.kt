@@ -16,14 +16,23 @@ import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kr.ac.kopo.talkti.data.remote.NetworkRepository
+import java.io.ByteArrayOutputStream
 
 class ScreenCaptureService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
+    
+    // 전송 간격 제어를 위한 최근 전송 시간 기억 (밀리초)
+    private var lastSendTime = 0L
 
     companion object {
         private const val CHANNEL_ID = "ScreenCaptureServiceChannel"
@@ -118,25 +127,40 @@ class ScreenCaptureService : Service() {
             try {
                 image = reader.acquireLatestImage()
                 if (image != null) {
-                    val planes = image.planes
-                    val buffer = planes[0].buffer
-                    val pixelStride = planes[0].pixelStride
-                    val rowStride = planes[0].rowStride
-                    val rowPadding = rowStride - pixelStride * width
+                    val currentTime = System.currentTimeMillis()
+                    // 2. 3초에 한 번만 전송 (전송 간격 제어 로직)
+                    if (currentTime - lastSendTime >= 3000) {
+                        lastSendTime = currentTime
 
-                    val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
-                    bitmap.copyPixelsFromBuffer(buffer)
+                        val planes = image.planes
+                        val buffer = planes[0].buffer
+                        val pixelStride = planes[0].pixelStride
+                        val rowStride = planes[0].rowStride
+                        val rowPadding = rowStride - pixelStride * width
 
-                    val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
+                        val bitmap = Bitmap.createBitmap(width + rowPadding / pixelStride, height, Bitmap.Config.ARGB_8888)
+                        bitmap.copyPixelsFromBuffer(buffer)
 
-                    // [주석] 캡처가 완료되면 finalBitmap이 생성됩니다.
-                    // 이 finalBitmap을 반환하거나 특정 경로(로컬 파일 시스템 등)에 저장하는 로직을 여기에 구현하세요.
-                    // 이후 에이전트로 전송할 때 이 파일 경로나 객체를 사용할 수 있습니다.
-                    
-                    // TODO: finalBitmap 저장 및 전송 로직 구현
+                        val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
 
-                    // 연속적인 캡처를 방지하기 위해 캡처 후 리소스 해제가 필요한 경우 여기서 호출할 수 있습니다.
-                    // stopCapture()
+                        // 1. JPEG(70% 품질)로 압축 및 ByteArray 변환
+                        val outputStream = ByteArrayOutputStream()
+                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
+                        val byteArray = outputStream.toByteArray()
+
+                        // 3. 비동기(Coroutine)로 서버에 이미지 전송
+                        CoroutineScope(Dispatchers.IO).launch {
+                            val repository = NetworkRepository()
+                            val isSuccess = repository.sendImageToServer(byteArray)
+                            
+                            // 4. 전송 결과 로그캣 출력
+                            if (isSuccess) {
+                                Log.d("ScreenCapture", "이미지 전송 성공! (크기: ${byteArray.size} bytes)")
+                            } else {
+                                Log.e("ScreenCapture", "이미지 전송 실패 ㅠㅠ")
+                            }
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
