@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="똑띠가 기기 사용을 도와드리기 위해\n화면을 확인해도 될까요?"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="40dp" />
+
+    <Button
+        android:id="@+id/btnCapture"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:text="확인했어요"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnOverlayStart"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:text="오버레이 권한 확인 및 실행"
+        android:layout_marginBottom="16dp" />
+
+    <Button
+        android:id="@+id/btnOverlayStop"
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:text="오버레이 끄기" />
+
+</LinearLayout>
