@@ -18,9 +18,10 @@ data class ServerResponse(
 
 interface ApiService {
     @Multipart
-    @POST("upload/image")
-    suspend fun postImage(
-        @Part image: MultipartBody.Part
+    @POST("api/screen_analyze")
+    suspend fun postScreenAnalyze(
+        @Part image: MultipartBody.Part,
+        @Part("tree") tree: okhttp3.RequestBody
     ): Response<ServerResponse>
 
     @POST("upload/text")

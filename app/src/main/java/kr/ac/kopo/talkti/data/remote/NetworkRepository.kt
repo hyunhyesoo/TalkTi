@@ -37,14 +37,19 @@ class NetworkRepository {
      * @param image 전송할 이미지 파이트 배열
      * @return 전송 성공 여부
      */
-    suspend fun sendImageToServer(image: ByteArray): Boolean {
+    /**
+     * 화면 이미지와 노드 트리를 서버로 함께 전송합니다.
+     */
+    suspend fun sendScreenAnalysisToServer(image: ByteArray, treeJson: String?): Boolean {
         return try {
             val requestBody = image.toRequestBody("image/jpeg".toMediaTypeOrNull())
             val multipartBody = MultipartBody.Part.createFormData(
                 "image", "capture.jpg", requestBody
             )
             
-            val response = apiService.postImage(multipartBody)
+            val treeRequestBody = (treeJson ?: "{}").toRequestBody("application/json".toMediaTypeOrNull())
+            
+            val response = apiService.postScreenAnalyze(multipartBody, treeRequestBody)
             response.isSuccessful && response.body()?.success == true
         } catch (e: Exception) {
             e.printStackTrace()

@@ -168,16 +168,30 @@ class ScreenCaptureService : Service() {
                         // 전송 직전 로그 출력
                         Log.d("ScreenCapture", "최종 용량: ${byteArray.size / 1024} KB, 적용 품질: ${quality}%")
 
-                        // 3. 비동기(Coroutine)로 서버에 이미지 전송
+                        // 3. 트리 추출 로직 연동
+                        val treeJson = kr.ac.kopo.talkti.features.accessibility.TalkTiAccessibilityService.extractScreenTreeJson()
+                        
+                        // ANALYSIS_TREE 로그캣 분할 출력 (4000자씩)
+                        val logText = treeJson ?: "{}"
+                        val maxLogSize = 4000
+                        for (i in 0..logText.length / maxLogSize) {
+                            val start = i * maxLogSize
+                            val end = if ((i + 1) * maxLogSize < logText.length) (i + 1) * maxLogSize else logText.length
+                            if (start < end) {
+                                Log.d("ANALYSIS_TREE", logText.substring(start, end))
+                            }
+                        }
+
+                        // 4. 비동기(Coroutine)로 서버에 통합 전송
                         CoroutineScope(Dispatchers.IO).launch {
                             val repository = NetworkRepository()
-                            val isSuccess = repository.sendImageToServer(byteArray)
+                            val isSuccess = repository.sendScreenAnalysisToServer(byteArray, logText)
                             
-                            // 4. 전송 결과 로그캣 출력
+                            // 5. 전송 결과 로그캣 출력
                             if (isSuccess) {
-                                Log.d("ScreenCapture", "이미지 전송 성공! (크기: ${byteArray.size} bytes)")
+                                Log.d("ScreenCapture", "화면 분석(이미지+트리) 전송 성공! (이미지 크기: ${byteArray.size} bytes)")
                             } else {
-                                Log.e("ScreenCapture", "이미지 전송 실패 ㅠㅠ")
+                                Log.e("ScreenCapture", "화면 분석(이미지+트리) 전송 실패 ㅠㅠ")
                             }
                         }
                     }
