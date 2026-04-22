@@ -51,4 +51,31 @@ class NetworkRepository {
             false
         }
     }
+
+    /**
+     * 에이전트 초기화 정보를 서버로 전송합니다.
+     * 
+     * @param hasAccessibility 접근성 권한 여부
+     * @param hasOverlay 오버레이 권한 여부
+     * @param features 제공 가능한 기능 리스트
+     * @return 성공 여부 boolean 반환
+     */
+    suspend fun sendAgentInitToServer(
+        hasAccessibility: Boolean,
+        hasOverlay: Boolean,
+        features: List<String> = listOf("길찾기", "사진보내기", "택시호출")
+    ): Boolean {
+        return try {
+            val request = AgentInitRequest(
+                hasAccessibilityPermission = hasAccessibility,
+                hasOverlayPermission = hasOverlay,
+                availableFeatures = features
+            )
+            val response = apiService.postAgentInit(request)
+            response.isSuccessful && response.body()?.success == true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
 }

@@ -26,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kr.ac.kopo.talkti.data.remote.NetworkRepository // 패키지 경로 확인!
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kr.ac.kopo.talkti.utils.PermissionUtils
 
 class MainActivity : ComponentActivity() {
 
@@ -83,6 +85,19 @@ class MainActivity : ComponentActivity() {
         btnOverlayStop.setOnClickListener {
             removeOverlay()
         }
+
+        // 호출 예시
+        val hasAccess = PermissionUtils.hasAccessibilityPermission(this)
+        val hasOverlay = PermissionUtils.hasOverlayPermission(this)
+
+        CoroutineScope(Dispatchers.IO).launch {
+            NetworkRepository().sendAgentInitToServer(
+                hasAccessibility = hasAccess,
+                hasOverlay = hasOverlay
+                // features 파라미터는 생략하면 기본값(길찾기, 사진보내기, 택시호출)이 전송됩니다.
+            )
+        }
+
     }
 
     private fun showOverlay() {

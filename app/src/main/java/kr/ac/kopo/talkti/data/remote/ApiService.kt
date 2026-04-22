@@ -11,6 +11,12 @@ data class SttRequest(
     val text: String
 )
 
+data class AgentInitRequest(
+    val hasAccessibilityPermission: Boolean,
+    val hasOverlayPermission: Boolean,
+    val availableFeatures: List<String>
+)
+
 data class ServerResponse(
     val success: Boolean,
     val message: String
@@ -26,5 +32,10 @@ interface ApiService {
     @POST("upload/text")
     suspend fun postText(
         @Body request: SttRequest
+    ): Response<ServerResponse>
+
+    @POST("agent/init")
+    suspend fun postAgentInit(
+        @Body request: AgentInitRequest
     ): Response<ServerResponse>
 }
