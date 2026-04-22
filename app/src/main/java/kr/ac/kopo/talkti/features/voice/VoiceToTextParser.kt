@@ -181,6 +181,10 @@ class VoiceToTextParser(
                 language = currentLanguageCode
             )
             tempSendData(sttRequest)
+            
+            // 서버 전송 후 듣기 즉시 종료
+            isContinuousListening = false
+            silenceTimerJob?.cancel()
         }
 
         if (isContinuousListening) {
