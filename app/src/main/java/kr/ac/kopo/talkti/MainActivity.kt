@@ -26,11 +26,28 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kr.ac.kopo.talkti.data.remote.NetworkRepository // 패키지 경로 확인!
 import android.util.Log
+import kr.ac.kopo.talkti.features.voice.VoiceToTextParser
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 class MainActivity : ComponentActivity() {
 
     private var overlayView: View? = null
     private var windowManager: WindowManager? = null
+    private lateinit var voiceParser: VoiceToTextParser
+    private var overlayTextView: TextView? = null
+    private var overlayMicButton: Button? = null
+
+    private val audioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            voiceParser.startListening()
+        } else {
+            Toast.makeText(this, "마이크 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     private val screenCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -60,6 +77,31 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
 
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        voiceParser = VoiceToTextParser(application)
+
+        lifecycleScope.launch {
+            voiceParser.state.collect { state ->
+                overlayTextView?.let { tv ->
+                    if (state.spokenText.isNotEmpty()) {
+                        tv.text = state.spokenText
+                    } else if (state.isSpeaking) {
+                        tv.text = "듣는 중..."
+                    } else if (state.error != null) {
+                        tv.text = "오류: ${state.error}\n마이크 버튼을 다시 눌러주세요"
+                    } else {
+                        tv.text = "똑띠 오버레이 작동 중!\n마이크 버튼을 눌러주세요"
+                    }
+                }
+
+                overlayMicButton?.let { btn ->
+                    if (state.isSpeaking) {
+                        btn.text = "마이크 끄기"
+                    } else {
+                        btn.text = "마이크 켜기"
+                    }
+                }
+            }
+        }
 
         val btnCapture = findViewById<Button>(R.id.btnCapture)
         btnCapture.setOnClickListener {
@@ -109,12 +151,34 @@ class MainActivity : ComponentActivity() {
         }
 
         val textView = TextView(this).apply {
-            text = "똑띠 오버레이 작동 중!"
+            text = "똑띠 오버레이 작동 중!\n마이크 버튼을 눌러주세요"
             setTextColor(Color.WHITE)
             textSize = 20f
         }
+        overlayTextView = textView
+
+        val micButton = Button(this).apply {
+            text = "마이크 켜기"
+            setOnClickListener {
+                if (text == "마이크 켜기") {
+                    if (ContextCompat.checkSelfPermission(
+                            this@MainActivity,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                    ) {
+                        voiceParser.startListening()
+                    } else {
+                        audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                } else {
+                    voiceParser.stopListening()
+                }
+            }
+        }
+        overlayMicButton = micButton
 
         layout.addView(textView)
+        layout.addView(micButton)
         overlayView = layout
 
         windowManager?.addView(overlayView, params)
@@ -124,6 +188,9 @@ class MainActivity : ComponentActivity() {
         overlayView?.let {
             windowManager?.removeView(it)
             overlayView = null
+            overlayTextView = null
+            overlayMicButton = null
+            voiceParser.stopListening()
         }
     }
 

@@ -21,13 +21,20 @@ class NetworkRepository {
      *     }
      * }
      */
-    suspend fun sendTextToServer(text: String): Boolean {
+    suspend fun sendTextToServer(text: String): Result<String> {
         return try {
             val response = apiService.postText(SttRequest(text))
-            response.isSuccessful && response.body()?.success == true
+            val body = response.body()
+
+            if (response.isSuccessful && body != null) {
+                // 서버가 보내준 메시지(예: 대답 텍스트)를 성공 결과로 반환
+                Result.success(body.message ?: "전송 성공")
+            } else {
+                Result.failure(Exception(body?.message ?: "서버 응답 처리 실패"))
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            false
+            Result.failure(e)
         }
     }
 
