@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                         tv.text = "똑띠 오버레이 작동 중!\n마이크 버튼을 눌러주세요"
                     }
                 }
-                
+
                 overlayMicButton?.let { btn ->
                     if (state.isSpeaking) {
                         btn.text = "마이크 끄기"

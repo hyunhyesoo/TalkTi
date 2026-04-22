@@ -143,10 +143,30 @@ class ScreenCaptureService : Service() {
 
                         val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
 
-                        // 1. JPEG(70% 품질)로 압축 및 ByteArray 변환
-                        val outputStream = ByteArrayOutputStream()
-                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                        val byteArray = outputStream.toByteArray()
+                        // 1. 가로 720px 해상도로 리사이징
+                        val targetWidth = 720
+                        val ratio = targetWidth.toFloat() / width.toFloat()
+                        val targetHeight = (height.toFloat() * ratio).toInt()
+                        val resizedBitmap = Bitmap.createScaledBitmap(finalBitmap, targetWidth, targetHeight, true)
+
+                        // 2. 용량 체크 루프 & 하한선(30)
+                        var quality = 80
+                        var byteArray: ByteArray
+
+                        do {
+                            val outputStream = ByteArrayOutputStream()
+                            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                            byteArray = outputStream.toByteArray()
+
+                            // 100KB 이하이거나 품질이 30 이하이면 중단
+                            if (byteArray.size <= 100 * 1024 || quality <= 30) {
+                                break
+                            }
+                            quality -= 10
+                        } while (true)
+
+                        // 전송 직전 로그 출력
+                        Log.d("ScreenCapture", "최종 용량: ${byteArray.size / 1024} KB, 적용 품질: ${quality}%")
 
                         // 3. 비동기(Coroutine)로 서버에 이미지 전송
                         CoroutineScope(Dispatchers.IO).launch {

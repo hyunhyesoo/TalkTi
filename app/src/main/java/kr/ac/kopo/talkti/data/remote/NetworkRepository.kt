@@ -25,8 +25,10 @@ class NetworkRepository {
         return try {
             val response = apiService.postText(SttRequest(text))
             val body = response.body()
-            if (response.isSuccessful && body?.success == true) {
-                Result.success(body.message)
+
+            if (response.isSuccessful && body != null) {
+                // 서버가 보내준 메시지(예: 대답 텍스트)를 성공 결과로 반환
+                Result.success(body.message ?: "전송 성공")
             } else {
                 Result.failure(Exception(body?.message ?: "서버 응답 처리 실패"))
             }
