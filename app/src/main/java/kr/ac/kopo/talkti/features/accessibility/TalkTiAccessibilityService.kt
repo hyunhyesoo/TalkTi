@@ -19,11 +19,20 @@ class TalkTiAccessibilityService : AccessibilityService() {
         }
 
         private fun extractNodeTree(node: AccessibilityNodeInfo?): JSONObject? {
+            println("실행")
             if (node == null) return null
+            println("바로 리턴")
+
+            // 화면에 안 보이는 노드는 제외
+            if (!node.isVisibleToUser) {
+                return null
+            }
+            println("안 보이는 것들 제외")
 
             val isClickable = node.isClickable
             val text = node.text?.toString() ?: node.contentDescription?.toString()
             val resId = node.viewIdResourceName
+            val className = node.className?.toString()
 
             val children = JSONArray()
             for (i in 0 until node.childCount) {
@@ -34,19 +43,24 @@ class TalkTiAccessibilityService : AccessibilityService() {
                 }
                 child?.recycle()
             }
+            println("요소 개수" + node.childCount)
 
-            // 의미 있는 노드인지 판별 (글자, 클릭 가능 여부, ID 존재)
-            val isMeaningfulInfo = !text.isNullOrBlank() || isClickable || !resId.isNullOrBlank()
+            // 조건 완화: 거의 대부분의 가시적 노드를 허용하되, 완전히 텅 빈 불필요한 레이아웃만 제외
+            // 자식이 있거나, 텍스트가 있거나, 클릭 가능하거나, ID가 있거나, Button/Image 타입인 경우
+            val isMeaningfulInfo = !text.isNullOrBlank() || isClickable || !resId.isNullOrBlank() || 
+                                   className?.contains("Button") == true || className?.contains("Image") == true
             val hasMeaningfulChildren = children.length() > 0
 
-            // 자신도 의미 없고, 자식도 의미 없으면 트리에서 제외 (null 반환)
-            if (!isMeaningfulInfo && !hasMeaningfulChildren) {
-                return null
-            }
+            // 너무 빈껍데기인 노드만 필터링 (원하시면 이 조건 자체를 주석처리하여 모든 노드 전송 가능)
+            //if (!isMeaningfulInfo && !hasMeaningfulChildren) {
+            //    return null
+            //}
 
             val obj = JSONObject()
             if (!resId.isNullOrBlank()) obj.put("resourceId", resId)
             if (!text.isNullOrBlank()) obj.put("text", text)
+            if (!className.isNullOrBlank()) obj.put("className", className)
+            
             obj.put("isClickable", isClickable)
 
             val rect = Rect()

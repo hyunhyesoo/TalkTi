@@ -173,6 +173,7 @@ class ScreenCaptureService : Service() {
                         
                         // ANALYSIS_TREE 로그캣 분할 출력 (4000자씩)
                         val logText = treeJson ?: "{}"
+                        Log.d("ANALYSIS_TREE", "--- 화면 트리 JSON 추출 결과 --- (총 길이: ${logText.length})")
                         val maxLogSize = 4000
                         for (i in 0..logText.length / maxLogSize) {
                             val start = i * maxLogSize
@@ -181,6 +182,7 @@ class ScreenCaptureService : Service() {
                                 Log.d("ANALYSIS_TREE", logText.substring(start, end))
                             }
                         }
+                        Log.d("ANALYSIS_TREE", "-----------------------------------")
 
                         // 4. 비동기(Coroutine)로 서버에 통합 전송
                         CoroutineScope(Dispatchers.IO).launch {

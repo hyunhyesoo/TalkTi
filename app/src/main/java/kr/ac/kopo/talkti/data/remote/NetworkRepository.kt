@@ -1,11 +1,16 @@
 package kr.ac.kopo.talkti.data.remote
 
+import android.util.Log
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.toRequestBody
 
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
+
 class NetworkRepository {
     private val apiService = NetworkModule.apiService
+    private val logger = LoggerFactory.getLogger(this.javaClass)
 
     /**
      * STT로 인식된 텍스트를 서버로 전송할 때 사용하는 함수입니다.
@@ -33,7 +38,7 @@ class NetworkRepository {
                 Result.failure(Exception(body?.message ?: "서버 응답 처리 실패"))
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            logger.info(e.message)
             Result.failure(e)
         }
     }
@@ -49,17 +54,26 @@ class NetworkRepository {
      */
     suspend fun sendScreenAnalysisToServer(image: ByteArray, treeJson: String?): Boolean {
         return try {
+            println("1번")
             val requestBody = image.toRequestBody("image/jpeg".toMediaTypeOrNull())
+            println("2번")
             val multipartBody = MultipartBody.Part.createFormData(
                 "image", "capture.jpg", requestBody
             )
+
+            println("3번")
             
             val treeRequestBody = (treeJson ?: "{}").toRequestBody("application/json".toMediaTypeOrNull())
+
+            println("4번")
             
             val response = apiService.postScreenAnalyze(multipartBody, treeRequestBody)
+            Log.v("response: ", response.toString())
+
+            println("5번")
             response.isSuccessful && response.body()?.success == true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.v("************", e.toString())
             false
         }
     }
