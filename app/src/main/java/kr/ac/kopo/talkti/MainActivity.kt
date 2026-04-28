@@ -1,38 +1,36 @@
 package kr.ac.kopo.talkti
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kr.ac.kopo.talkti.features.accessibility.TalkTiAccessibilityService // 👈 팀원 파일 import 추가!
 import kr.ac.kopo.talkti.features.images.ScreenCaptureService
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kr.ac.kopo.talkti.data.remote.NetworkRepository // 패키지 경로 확인!
-import android.util.Log
-import kr.ac.kopo.talkti.features.voice.VoiceToTextParser
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.core.content.ContextCompat
-import android.graphics.Rect
-import android.view.accessibility.AccessibilityNodeInfo
 import kr.ac.kopo.talkti.features.overlay.OverlayView
+import kr.ac.kopo.talkti.features.voice.VoiceToTextParser
 
 class MainActivity : ComponentActivity() {
 
@@ -57,7 +55,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // 2. Rect 영역에 빨간색 오버레이 그리기
     private fun drawRedBoxOverlay(rect: Rect) {
         customOverlayView.updateRect(rect)
     }
@@ -66,37 +63,23 @@ class MainActivity : ComponentActivity() {
         customOverlayView.updateRect(null)
     }
 
-    private val audioPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            voiceParser.startListening()
-        } else {
-            Toast.makeText(this, "마이크 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
-        }
+    // --- 권한 요청 런처들 ---
+    private val audioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) voiceParser.startListening()
+        else Toast.makeText(this, "마이크 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
     }
 
-    private val screenCaptureLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) { result ->
+    private val screenCaptureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK && result.data != null) {
             lifecycleScope.launch {
                 delay(500)
                 startScreenCaptureService(result.resultCode, result.data!!)
             }
-        } else {
-            Toast.makeText(this, "화면 캡처 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private val overlayPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.StartActivityForResult()
-    ) {
-        if (Settings.canDrawOverlays(this)) {
-            showOverlay()
-        } else {
-            Toast.makeText(this, "오버레이 권한이 허용되지 않았습니다.", Toast.LENGTH_SHORT).show()
-        }
+    private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (Settings.canDrawOverlays(this)) showOverlay()
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -104,10 +87,10 @@ class MainActivity : ComponentActivity() {
         setContentView(R.layout.activity_main)
 
         customOverlayView = findViewById(R.id.overlayView)
-
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         voiceParser = VoiceToTextParser(application)
 
+        // 🟢 [수정 포인트 1] lifecycleScope와 collect 블록을 여기서 닫아줘야 합니다.
         lifecycleScope.launch {
             voiceParser.state.collect { state ->
                 overlayTextView?.let { tv ->
@@ -123,26 +106,25 @@ class MainActivity : ComponentActivity() {
                 }
 
                 overlayMicButton?.let { btn ->
-                    if (state.isSpeaking) {
-                        btn.text = "마이크 끄기"
-                    } else {
-                        btn.text = "마이크 켜기"
-                    }
+                    btn.text = if (state.isSpeaking) "마이크 끄기" else "마이크 켜기"
                 }
+
                 state.lastResponse?.let { response ->
                     if (response.status == "overlay_command") {
-                        // 루트 노드를 안전하게 가져오기 위해 '?'를 사용합니다.
-                        val rootNode = window.decorView.rootView?.accessibilityNodeInfo
-
-                        // 영서님이 찾으신 실제 변수명 'target_id'를 사용합니다!
-                        findNodeById(rootNode, response.target_id)
+                        val rootNode = TalkTiAccessibilityService.instance?.rootInActiveWindow
+                        if (rootNode != null) {
+                            findNodeById(rootNode, response.target_id)
+                        } else {
+                            Log.e("OVERLAY", "접근성 서비스가 연결되지 않았거나 권한이 없습니다.")
+                        }
                     } else if (response.status == "clear") {
                         removeRedBoxOverlay()
                     }
-            }
-        }
+                }
+            } // collect 끝
+        } // lifecycleScope 끝 (이게 안 닫혀 있어서 아래 버튼들이 에러가 났던 거예요!)
 
-
+        // 🟢 [수정 포인트 2] 버튼 리스너들은 onCreate의 메인 흐름에 있어야 합니다.
         val btnCapture = findViewById<Button>(R.id.btnCapture)
         btnCapture.setOnClickListener {
             requestScreenCapture()
@@ -151,10 +133,7 @@ class MainActivity : ComponentActivity() {
         val btnOverlayStart = findViewById<Button>(R.id.btnOverlayStart)
         btnOverlayStart.setOnClickListener {
             if (!Settings.canDrawOverlays(this)) {
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 overlayPermissionLauncher.launch(intent)
             } else {
                 showOverlay()
@@ -186,7 +165,7 @@ class MainActivity : ComponentActivity() {
 
         val layout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#99000000")) // 반투명 검은색 배경
+            setBackgroundColor(Color.parseColor("#99000000"))
             setPadding(48, 48, 48, 48)
         }
 
@@ -201,11 +180,7 @@ class MainActivity : ComponentActivity() {
             text = "마이크 켜기"
             setOnClickListener {
                 if (text == "마이크 켜기") {
-                    if (ContextCompat.checkSelfPermission(
-                            this@MainActivity,
-                            Manifest.permission.RECORD_AUDIO
-                        ) == PackageManager.PERMISSION_GRANTED
-                    ) {
+                    if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                         voiceParser.startListening()
                     } else {
                         audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -236,8 +211,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreenCapture() {
-        val mediaProjectionManager =
-            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val intent = mediaProjectionManager.createScreenCaptureIntent()
         screenCaptureLauncher.launch(intent)
     }
@@ -247,28 +221,13 @@ class MainActivity : ComponentActivity() {
             putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, resultCode)
             putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, data)
         }
-
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent)
-            } else {
-                startService(serviceIntent)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(this, "권한 설정 타이밍 문제로 실행되지 않았습니다. 다시 눌러주세요.", Toast.LENGTH_LONG).show()
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent)
+        else startService(serviceIntent)
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // 1. 오버레이 제거 및 STT 중단
         removeOverlay()
-
-        // 2. 중요! VoiceToTextParser 내부의 TTS와 자원들을 완전히 정리
-        if (::voiceParser.isInitialized) {
-            voiceParser.destroy() // 우리가 추가했던 그 함수!
-            Log.d("MainActivity", "VoiceToTextParser 및 TTS 자원 해제 완료")
-        }
+        if (::voiceParser.isInitialized) voiceParser.destroy()
     }
 }
