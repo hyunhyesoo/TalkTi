@@ -32,7 +32,7 @@ import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 import android.graphics.Rect
 import android.view.accessibility.AccessibilityNodeInfo
-import android.graphics.drawable.GradientDrawable
+import kr.ac.kopo.talkti.features.overlay.OverlayView
 
 class MainActivity : ComponentActivity() {
 
@@ -41,7 +41,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var voiceParser: VoiceToTextParser
     private var overlayTextView: TextView? = null
     private var overlayMicButton: Button? = null
-    private var redBoxView: View? = null
+    private lateinit var customOverlayView: OverlayView
 
     // 1. AccessibilityNodeInfo에서 ID로 뷰 찾기
     fun findNodeById(rootNode: AccessibilityNodeInfo?, targetId: String) {
@@ -59,40 +59,11 @@ class MainActivity : ComponentActivity() {
 
     // 2. Rect 영역에 빨간색 오버레이 그리기
     private fun drawRedBoxOverlay(rect: Rect) {
-        removeRedBoxOverlay()
-
-        val params = WindowManager.LayoutParams(
-            rect.width(),
-            rect.height(),
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            else
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-            PixelFormat.TRANSLUCENT
-        )
-
-        params.gravity = Gravity.TOP or Gravity.START
-        params.x = rect.left
-        params.y = rect.top
-
-        val boxView = View(this).apply {
-            val gd = GradientDrawable()
-            gd.setColor(Color.TRANSPARENT)
-            gd.setStroke(8, Color.RED)
-            background = gd
-        }
-
-        redBoxView = boxView
-        windowManager?.addView(boxView, params)
+        customOverlayView.updateRect(rect)
     }
 
     private fun removeRedBoxOverlay() {
-        redBoxView?.let {
-            windowManager?.removeView(it)
-            redBoxView = null
-        }
+        customOverlayView.updateRect(null)
     }
 
     private val audioPermissionLauncher = registerForActivityResult(
@@ -132,6 +103,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        customOverlayView = findViewById(R.id.overlayView)
+
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         voiceParser = VoiceToTextParser(application)
 
@@ -156,8 +129,19 @@ class MainActivity : ComponentActivity() {
                         btn.text = "마이크 켜기"
                     }
                 }
+                state.lastResponse?.let { response ->
+                    if (response.status == "overlay_command") {
+                        // 루트 노드를 안전하게 가져오기 위해 '?'를 사용합니다.
+                        val rootNode = window.decorView.rootView?.accessibilityNodeInfo
+
+                        // 영서님이 찾으신 실제 변수명 'target_id'를 사용합니다!
+                        findNodeById(rootNode, response.target_id)
+                    } else if (response.status == "clear") {
+                        removeRedBoxOverlay()
+                    }
             }
         }
+
 
         val btnCapture = findViewById<Button>(R.id.btnCapture)
         btnCapture.setOnClickListener {

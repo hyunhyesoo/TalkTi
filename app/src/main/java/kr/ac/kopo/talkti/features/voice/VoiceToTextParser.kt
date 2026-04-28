@@ -30,7 +30,8 @@ import java.util.Locale
 data class VoiceToTextParserState(
     val spokenText: String = "",
     val isSpeaking: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val lastResponse: AgentCommandResponse? = null // ✨ 이 한 줄을 추가!
 )
 
 /**
@@ -236,7 +237,7 @@ class VoiceToTextParser(
                     try {
                         val response = Gson().fromJson(serverMessage, AgentCommandResponse::class.java)
                         ttsManager.speak(response.tts_message)
-                        _state.update { it.copy(spokenText = response.target_text) }
+                        _state.update { it.copy(spokenText = response.target_text, lastResponse = response) }
                     } catch (e: Exception) {
                         Log.e("STT_SERVER", "JSON 파싱 에러", e)
                         ttsManager.speak("서버 응답을 처리하는데 문제가 발생했습니다.")
