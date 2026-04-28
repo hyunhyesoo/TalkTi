@@ -120,6 +120,12 @@ class VoiceToTextParser(
         recognizer = null
     }
 
+    fun destroy() {
+        stopListening()         // 1. 음성 인식 중단
+        ttsManager.release()     // 2. TTS 엔진 종료 (메모리 해제)
+        silenceTimerJob?.cancel() // 3. 10초 타이머 취소
+    }
+
     override fun onReadyForSpeech(params: Bundle?) {
         _state.update { it.copy(isSpeaking = true, error = null) }
     }
@@ -217,19 +223,22 @@ class VoiceToTextParser(
     private fun tempSendData(request: SttRequest) {
         Log.d("VoiceToTextParser", "서버 전송 시도 중: ${request.command}")
 
-        // networkRepository를 사용해서 실제 서버로 쏘는 로직
         scope.launch(Dispatchers.IO) {
             val result = networkRepository.sendTextToServer(request.command)
 
             result.onSuccess { serverMessage ->
-                Log.d("STT_SERVER", "성공! 답변: $serverMessage")
+                // serverMessage가 "{"ttsMessage": "안녕"}" 같은 JSON으로 올 경우를 대비
+                Log.d("STT_SERVER", "성공! 서버 답변 원본: $serverMessage")
+
                 launch(Dispatchers.Main) {
+                    // TODO: 나중에 여기서 JSON 파싱 로직을 넣어 response.ttsMessage만 추출할 예정
+                    // 지금은 일단 통째로 읽어주기
                     ttsManager.speak(serverMessage)
                 }
             }.onFailure { error ->
-                Log.e("STT_SERVER", "실패 ㅠㅠ", error)
+                Log.e("STT_SERVER", "네트워크 통신 실패", error)
                 launch(Dispatchers.Main) {
-                    ttsManager.speak("다시 말씀해주세요")
+                    ttsManager.speak("서버와 연결이 원활하지 않습니다. 다시 시도해 주세요.")
                 }
             }
         }

@@ -92,7 +92,7 @@ class MainActivity : ComponentActivity() {
                         tv.text = "똑띠 오버레이 작동 중!\n마이크 버튼을 눌러주세요"
                     }
                 }
-                
+
                 overlayMicButton?.let { btn ->
                     if (state.isSpeaking) {
                         btn.text = "마이크 끄기"
@@ -195,7 +195,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestScreenCapture() {
-        val mediaProjectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        val mediaProjectionManager =
+            getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         val intent = mediaProjectionManager.createScreenCaptureIntent()
         screenCaptureLauncher.launch(intent)
     }
@@ -220,6 +221,13 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        // 1. 오버레이 제거 및 STT 중단
         removeOverlay()
+
+        // 2. 중요! VoiceToTextParser 내부의 TTS와 자원들을 완전히 정리
+        if (::voiceParser.isInitialized) {
+            voiceParser.destroy() // 우리가 추가했던 그 함수!
+            Log.d("MainActivity", "VoiceToTextParser 및 TTS 자원 해제 완료")
+        }
     }
 }
