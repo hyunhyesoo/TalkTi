@@ -143,21 +143,57 @@ class ScreenCaptureService : Service() {
 
                         val finalBitmap = Bitmap.createBitmap(bitmap, 0, 0, width, height)
 
-                        // 1. JPEG(70% 품질)로 압축 및 ByteArray 변환
-                        val outputStream = ByteArrayOutputStream()
-                        finalBitmap.compress(Bitmap.CompressFormat.JPEG, 70, outputStream)
-                        val byteArray = outputStream.toByteArray()
+                        // 1. 가로 720px 해상도로 리사이징
+                        val targetWidth = 720
+                        val ratio = targetWidth.toFloat() / width.toFloat()
+                        val targetHeight = (height.toFloat() * ratio).toInt()
+                        val resizedBitmap = Bitmap.createScaledBitmap(finalBitmap, targetWidth, targetHeight, true)
 
-                        // 3. 비동기(Coroutine)로 서버에 이미지 전송
+                        // 2. 용량 체크 루프 & 하한선(30)
+                        var quality = 80
+                        var byteArray: ByteArray
+
+                        do {
+                            val outputStream = ByteArrayOutputStream()
+                            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+                            byteArray = outputStream.toByteArray()
+
+                            // 100KB 이하이거나 품질이 30 이하이면 중단
+                            if (byteArray.size <= 100 * 1024 || quality <= 30) {
+                                break
+                            }
+                            quality -= 10
+                        } while (true)
+
+                        // 전송 직전 로그 출력
+                        Log.d("ScreenCapture", "최종 용량: ${byteArray.size / 1024} KB, 적용 품질: ${quality}%")
+
+                        // 3. 트리 추출 로직 연동
+                        val treeJson = kr.ac.kopo.talkti.features.accessibility.TalkTiAccessibilityService.extractScreenTreeJson()
+                        
+                        // ANALYSIS_TREE 로그캣 분할 출력 (4000자씩)
+                        val logText = treeJson ?: "{}"
+                        Log.d("ANALYSIS_TREE", "--- 화면 트리 JSON 추출 결과 --- (총 길이: ${logText.length})")
+                        val maxLogSize = 4000
+                        for (i in 0..logText.length / maxLogSize) {
+                            val start = i * maxLogSize
+                            val end = if ((i + 1) * maxLogSize < logText.length) (i + 1) * maxLogSize else logText.length
+                            if (start < end) {
+                                Log.d("ANALYSIS_TREE", logText.substring(start, end))
+                            }
+                        }
+                        Log.d("ANALYSIS_TREE", "-----------------------------------")
+
+                        // 4. 비동기(Coroutine)로 서버에 통합 전송
                         CoroutineScope(Dispatchers.IO).launch {
                             val repository = NetworkRepository()
-                            val isSuccess = repository.sendImageToServer(byteArray)
+                            val isSuccess = repository.sendScreenAnalysisToServer(byteArray, logText)
                             
-                            // 4. 전송 결과 로그캣 출력
+                            // 5. 전송 결과 로그캣 출력
                             if (isSuccess) {
-                                Log.d("ScreenCapture", "이미지 전송 성공! (크기: ${byteArray.size} bytes)")
+                                Log.d("ScreenCapture", "화면 분석(이미지+트리) 전송 성공! (이미지 크기: ${byteArray.size} bytes)")
                             } else {
-                                Log.e("ScreenCapture", "이미지 전송 실패 ㅠㅠ")
+                                Log.e("ScreenCapture", "화면 분석(이미지+트리) 전송 실패 ㅠㅠ")
                             }
                         }
                     }
