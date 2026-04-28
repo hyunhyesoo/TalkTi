@@ -30,6 +30,9 @@ import kr.ac.kopo.talkti.features.voice.VoiceToTextParser
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import android.graphics.Rect
+import android.view.accessibility.AccessibilityNodeInfo
+import android.graphics.drawable.GradientDrawable
 
 class MainActivity : ComponentActivity() {
 
@@ -38,6 +41,59 @@ class MainActivity : ComponentActivity() {
     private lateinit var voiceParser: VoiceToTextParser
     private var overlayTextView: TextView? = null
     private var overlayMicButton: Button? = null
+    private var redBoxView: View? = null
+
+    // 1. AccessibilityNodeInfo에서 ID로 뷰 찾기
+    fun findNodeById(rootNode: AccessibilityNodeInfo?, targetId: String) {
+        if (rootNode == null) return
+        val nodes = rootNode.findAccessibilityNodeInfosByViewId(targetId)
+        if (nodes.isNotEmpty()) {
+            val targetNode = nodes[0]
+            val rect = Rect()
+            targetNode.getBoundsInScreen(rect)
+            drawRedBoxOverlay(rect)
+        } else {
+            Toast.makeText(this, "해당 ID의 뷰를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 2. Rect 영역에 빨간색 오버레이 그리기
+    private fun drawRedBoxOverlay(rect: Rect) {
+        removeRedBoxOverlay()
+
+        val params = WindowManager.LayoutParams(
+            rect.width(),
+            rect.height(),
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+            PixelFormat.TRANSLUCENT
+        )
+
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = rect.left
+        params.y = rect.top
+
+        val boxView = View(this).apply {
+            val gd = GradientDrawable()
+            gd.setColor(Color.TRANSPARENT)
+            gd.setStroke(8, Color.RED)
+            background = gd
+        }
+
+        redBoxView = boxView
+        windowManager?.addView(boxView, params)
+    }
+
+    private fun removeRedBoxOverlay() {
+        redBoxView?.let {
+            windowManager?.removeView(it)
+            redBoxView = null
+        }
+    }
 
     private val audioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -192,6 +248,7 @@ class MainActivity : ComponentActivity() {
             overlayMicButton = null
             voiceParser.stopListening()
         }
+        removeRedBoxOverlay()
     }
 
     private fun requestScreenCapture() {

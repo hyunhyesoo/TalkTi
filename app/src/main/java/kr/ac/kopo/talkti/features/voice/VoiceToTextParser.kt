@@ -16,7 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kr.ac.kopo.talkti.data.model.AgentCommandResponse
 import kr.ac.kopo.talkti.data.model.SttRequest
+import com.google.gson.Gson
 import kr.ac.kopo.talkti.data.remote.NetworkRepository
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -231,9 +233,14 @@ class VoiceToTextParser(
                 Log.d("STT_SERVER", "성공! 서버 답변 원본: $serverMessage")
 
                 launch(Dispatchers.Main) {
-                    // TODO: 나중에 여기서 JSON 파싱 로직을 넣어 response.ttsMessage만 추출할 예정
-                    // 지금은 일단 통째로 읽어주기
-                    ttsManager.speak(serverMessage)
+                    try {
+                        val response = Gson().fromJson(serverMessage, AgentCommandResponse::class.java)
+                        ttsManager.speak(response.tts_message)
+                        _state.update { it.copy(spokenText = response.target_text) }
+                    } catch (e: Exception) {
+                        Log.e("STT_SERVER", "JSON 파싱 에러", e)
+                        ttsManager.speak("서버 응답을 처리하는데 문제가 발생했습니다.")
+                    }
                 }
             }.onFailure { error ->
                 Log.e("STT_SERVER", "네트워크 통신 실패", error)
